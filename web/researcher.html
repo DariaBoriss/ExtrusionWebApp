@@ -1,0 +1,323 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Исследователь</title>
+
+    <!-- Chart.js через CDN (UMD) — без ошибок -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f4f7fa;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        h1, h2, h3 {
+            color: #1e3c72;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        select, input, button {
+            padding: 12px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+
+        select, input {
+            flex: 1;
+            min-width: 180px;
+        }
+
+        button {
+            background: #00d4ff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            min-width: 140px;
+        }
+
+            button:hover {
+                background: #00aaff;
+            }
+
+        #downloadBtn {
+            background: #28a745;
+        }
+
+            #downloadBtn:hover {
+                background: #218838;
+            }
+
+        #error {
+            color: #dc3545;
+            font-weight: bold;
+            margin: 10px 0;
+            min-height: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            font-size: 15px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+
+        th {
+            background: #1e3c72;
+            color: white;
+        }
+
+        .charts {
+            display: flex;
+            gap: 25px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+
+        .chart-container {
+            flex: 1;
+            min-width: 420px;
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        canvas {
+            height: 320px;
+        }
+
+        .note {
+            font-size: 14px;
+            color: #666;
+            font-style: italic;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Исследование экструзии</h1>
+
+        <div class="input-group">
+            <select id="material"></select>
+            <input id="T" type="number" placeholder="T, °C (100–250)" min="100" max="250">
+            <input id="gammadot" type="number" placeholder="γ̇, с⁻¹ (1–1000)" min="1" max="1000">
+            <button onclick="calculate()">Рассчитать</button>
+            <button id="downloadBtn" onclick="downloadReport()">Скачать отчёт</button>
+        </div>
+        <div id="error"></div>
+
+        <h2>Вязкость μ (Па·с) — типовые режимы</h2>
+        <table id="table">
+            <thead>
+                <tr><th>T \ γ̇</th><th>1 с⁻¹</th><th>100 с⁻¹</th><th>1000 с⁻¹</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>100 °C</td><td id="v100_1">-</td><td id="v100_100">-</td><td id="v100_1000">-</td></tr>
+                <tr><td>175 °C</td><td id="v175_1">-</td><td id="v175_100">-</td><td id="v175_1000">-</td></tr>
+                <tr><td>250 °C</td><td id="v250_1">-</td><td id="v250_100">-</td><td id="v250_1000">-</td></tr>
+            </tbody>
+        </table>
+
+        <div class="charts">
+            <div class="chart-container">
+                <h3>μ(T) при γ̇ = <span id="gammaLabel">—</span> с⁻¹</h3>
+                <canvas id="chartT"></canvas>
+                <div class="note">Зависимость вязкости от температуры при заданной скорости сдвига</div>
+            </div>
+            <div class="chart-container">
+                <h3>μ(γ̇) при T = <span id="tempLabel">—</span> °C</h3>
+                <canvas id="chartGamma"></canvas>
+                <div class="note">Зависимость вязкости от скорости сдвига при заданной температуре</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const T_VALUES = [100, 175, 250];
+        const GAMMA_VALUES = [1, 100, 1000];
+        let chartT = null, chartGamma = null;
+        let lastReportUrl = '';
+
+        // Загрузка материалов
+        async function loadMaterials() {
+            try {
+                const res = await fetch('/api/materials');
+                const data = await res.json();
+                const select = document.getElementById('material');
+                select.innerHTML = '<option value="">-- Выберите материал --</option>';
+                data.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    opt.textContent = m.name;
+                    select.appendChild(opt);
+                });
+            } catch (err) {
+                showError('Ошибка загрузки материалов');
+            }
+        }
+
+        function showError(msg) {
+            const error = document.getElementById('error');
+            error.textContent = msg;
+            setTimeout(() => error.textContent = '', 5000);
+        }
+
+        function validate() {
+            const materialId = document.getElementById('material').value;
+            const T = parseFloat(document.getElementById('T').value);
+            const g = parseFloat(document.getElementById('gammadot').value);
+
+            if (!materialId) return { valid: false, msg: 'Выберите материал' };
+            if (isNaN(T) || T < 100 || T > 250) return { valid: false, msg: 'T: 100–250 °C' };
+            if (isNaN(g) || g < 1 || g > 1000) return { valid: false, msg: 'γ̇: 1–1000 с⁻¹' };
+            return { valid: true, data: { materialId: parseInt(materialId), T, gammadot: g } };
+        }
+
+        async function calculate() {
+            const v = validate();
+            if (!v.valid) { showError(v.msg); return; }
+
+            const { materialId, T, gammadot } = v.data;
+            document.getElementById('gammaLabel').textContent = gammadot;
+            document.getElementById('tempLabel').textContent = T;
+
+            try {
+                const res = await fetch('/api/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ materialId, T, gammadot })
+                });
+                const data = await res.json();
+                if (data.error) { showError(data.error); return; }
+
+                lastReportUrl = data.report_url;
+
+                // === ЗАПОЛНЯЕМ ТАБЛИЦУ 3×3 ===
+
+                T_VALUES.forEach(t => {
+   
+                    GAMMA_VALUES.forEach(g => {
+                        const mu_val = data.full_data.mu_gamma[t][GAMMA_VALUES.indexOf(g)];
+                        console.log(mu_val);
+                        const cell = document.getElementById(`v${t}_${g}`);
+                        if (cell && mu_val !== undefined) {
+                            cell.textContent = mu_val.toFixed(1);
+                        }
+                    });
+                });
+
+                drawCharts(data.full_data, T, gammadot);
+            } catch (err) {
+                console.log(err);
+                showError('Ошибка сервера');
+            }
+        }
+
+        function drawCharts(fd, T, gammadot) {
+            if (typeof Chart === 'undefined') {
+                showError('Chart.js не загружен');
+                return;
+            }
+
+            const ctxT = document.getElementById('chartT').getContext('2d');
+            const ctxG = document.getElementById('chartGamma').getContext('2d');
+
+            if (chartT) chartT.destroy();
+            if (chartGamma) chartGamma.destroy();
+
+            // === μ(T) при фиксированном γ̇ ===
+            chartT = new Chart(ctxT, {
+                type: 'line',
+                data: {
+                    labels: fd.T_range,
+                    datasets: [{
+                        label: `γ̇ = ${gammadot} с⁻¹`,
+                        data: fd.mu_vs_T,
+                        borderColor: '#00d4ff',
+                        backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                        fill: false,
+                        tension: 0.2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        x: { title: { display: true, text: 'Температура T (°C)' } },
+                        y: { title: { display: true, text: 'Вязкость μ (Па·с)' } }
+                    }
+                }
+            });
+
+            // === μ(γ̇) при фиксированном T ===
+            chartGamma = new Chart(ctxG, {
+                type: 'line',
+                data: {
+                    labels: fd.gamma_range,
+                    datasets: [{
+                        label: `T = ${T} °C`,
+                        data: fd.mu_vs_gamma,
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        fill: false,
+                        tension: 0.2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        x: {
+                            type: 'logarithmic',
+                            title: { display: true, text: 'Скорость сдвига γ̇ (с⁻¹)' }
+                        },
+                        y: { title: { display: true, text: 'Вязкость μ (Па·с)' } }
+                    }
+                }
+            });
+        }
+
+        function downloadReport() {
+            if (lastReportUrl) {
+                window.location.href = lastReportUrl;
+            } else {
+                alert('Сначала выполните расчёт');
+            }
+        }
+
+        // Инициализация
+        window.addEventListener('load', () => {
+            loadMaterials();
+        });
+    </script>
+</body>
+</html>

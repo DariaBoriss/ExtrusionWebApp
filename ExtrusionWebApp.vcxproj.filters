@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Исходные файлы">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Файлы заголовков">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Файлы ресурсов">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="src">
+      <UniqueIdentifier>{436894b5-c3c1-41b0-b8f0-989a2fd81a42}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{313a5cf5-b675-4a6d-8912-657e07f6dc1c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="sql">
+      <UniqueIdentifier>{bb915065-348f-4487-80ad-c3745887f86f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="libs">
+      <UniqueIdentifier>{ee1aed2e-a3e7-4374-9fe4-f9718fba7101}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="web">
+      <UniqueIdentifier>{cd9ab415-51a7-4125-8c36-550072cc5e43}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>src</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\httplib.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\libpq-fe.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\postgres_ext.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\nlohmannjson.hpp">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="web\index.html">
+      <Filter>web</Filter>
+    </None>
+    <None Include="web\researcher.html">
+      <Filter>web</Filter>
+    </None>
+    <None Include="web\admin.html">
+      <Filter>web</Filter>
+    </None>
+    <None Include="web\chart.min.js">
+      <Filter>web</Filter>
+    </None>
+  </ItemGroup>
+</Project>

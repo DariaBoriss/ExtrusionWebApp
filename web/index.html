@@ -1,0 +1,153 @@
+﻿<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Экструзия полимеров</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        .login-box {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 40px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            width: 350px;
+            text-align: center;
+        }
+
+        h2 {
+            margin-bottom: 30px;
+            font-size: 24px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: #00d4ff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.3s;
+        }
+
+            button:hover {
+                background: #00aaff;
+            }
+
+        .error {
+            color: #ff6b6b;
+            margin-top: 10px;
+            font-size: 14px;
+            min-height: 20px;
+        }
+
+        .loading {
+            color: #00d4ff;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <h2>Вход в систему</h2>
+        <input type="text" id="login" placeholder="Логин" autocomplete="username" />
+        <input type="password" id="password" placeholder="Пароль" autocomplete="current-password" />
+        <button id="loginBtn" onclick="login()">Войти</button>
+        <p class="loading" id="loading"></p>
+        <p class="error" id="error"></p>
+    </div>
+
+    <script>
+        // Блокируем повторные клики
+        let isLoggingIn = false;
+
+        async function login() {
+            if (isLoggingIn) return;
+            isLoggingIn = true;
+
+            const loginInput = document.getElementById('login').value.trim();
+            const passwordInput = document.getElementById('password').value;
+            const errorEl = document.getElementById('error');
+            const loadingEl = document.getElementById('loading');
+            const btn = document.getElementById('loginBtn');
+
+            // Сброс
+            errorEl.textContent = '';
+            loadingEl.textContent = 'Проверка...';
+            btn.disabled = true;
+
+            if (!loginInput || !passwordInput) {
+                errorEl.textContent = 'Введите логин и пароль';
+                resetLogin();
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ login: loginInput, password: passwordInput })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    loadingEl.textContent = 'Успешно!';
+                    setTimeout(() => {
+                        if (data.role === 'admin') {
+                            window.location.href = '/admin.html';
+                        } else {
+                            window.location.href = '/researcher.html';
+                        }
+                    }, 300);
+                } else {
+                    errorEl.textContent = data.error || 'Неверный логин или пароль';
+                    resetLogin();
+                }
+            } catch (err) {
+                console.error('Login error:', err);
+                errorEl.textContent = 'Нет связи с сервером. Проверьте, запущен ли сервер.';
+                resetLogin();
+            }
+        }
+
+        function resetLogin() {
+            document.getElementById('loading').textContent = '';
+            document.getElementById('loginBtn').disabled = false;
+            isLoggingIn = false;
+        }
+
+        // Разрешаем Enter
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') login();
+        });
+    </script>
+</body>
+</html>
