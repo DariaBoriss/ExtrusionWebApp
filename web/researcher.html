@@ -1,13 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Исследователь</title>
-
-    <!-- Chart.js через CDN (UMD) — без ошибок -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-
     <style>
         body {
             font-family: 'Segoe UI', sans-serif;
@@ -17,7 +14,7 @@
         }
 
         .container {
-            max-width: 1100px;
+            max-width: 1200px;
             margin: auto;
             background: white;
             padding: 30px;
@@ -76,10 +73,16 @@
             min-height: 24px;
         }
 
+        .table-container {
+            overflow-x: auto;
+            margin: 25px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin: 25px 0;
             font-size: 15px;
         }
 
@@ -87,12 +90,23 @@
             padding: 12px;
             text-align: center;
             border: 1px solid #ddd;
+            min-width: 80px;
         }
 
         th {
             background: #1e3c72;
             color: white;
+            position: sticky;
+            left: 0;
+            z-index: 1;
         }
+
+            th:first-child, td:first-child {
+                background: #f0f0f0;
+                position: sticky;
+                left: 0;
+                z-index: 1;
+            }
 
         .charts {
             display: flex;
@@ -128,46 +142,43 @@
 
         <div class="input-group">
             <select id="material"></select>
-            <input id="T" type="number" placeholder="T, °C (100–250)" min="100" max="250">
-            <input id="gammadot" type="number" placeholder="γ̇, с⁻¹ (1–1000)" min="1" max="1000">
+            <input id="minT" type="number" step="0.1" placeholder="T min, °C (100–250)">
+            <input id="maxT" type="number" step="0.1" placeholder="T max, °C (100–250)">
+            <input id="deltaT" type="number" step="0.1" placeholder="ΔT, °C (>0)">
+            <input id="minGamma" type="number" step="1" placeholder="γ̇ min, с⁻¹ (1–1000)">
+            <input id="maxGamma" type="number" step="1" placeholder="γ̇ max, с⁻¹ (1–1000)">
+            <input id="deltaGamma" type="number" step="1" placeholder="Δγ̇, с⁻¹ (>0)">
             <button onclick="calculate()">Рассчитать</button>
             <button id="downloadBtn" onclick="downloadReport()">Скачать отчёт</button>
         </div>
         <div id="error"></div>
 
-        <h2>Вязкость μ (Па·с) — типовые режимы</h2>
-        <table id="table">
-            <thead>
-                <tr><th>T \ γ̇</th><th>1 с⁻¹</th><th>100 с⁻¹</th><th>1000 с⁻¹</th></tr>
-            </thead>
-            <tbody>
-                <tr><td>100 °C</td><td id="v100_1">-</td><td id="v100_100">-</td><td id="v100_1000">-</td></tr>
-                <tr><td>175 °C</td><td id="v175_1">-</td><td id="v175_100">-</td><td id="v175_1000">-</td></tr>
-                <tr><td>250 °C</td><td id="v250_1">-</td><td id="v250_100">-</td><td id="v250_1000">-</td></tr>
-            </tbody>
-        </table>
+        <h2>Вязкость ƞ (Па·с) — все режимы</h2>
+        <div class="table-container">
+            <table id="table">
+                <thead><tr><th>T \\ γ̇</th></tr></thead>
+                <tbody></tbody>
+            </table>
+        </div>
 
         <div class="charts">
             <div class="chart-container">
-                <h3>μ(T) при γ̇ = <span id="gammaLabel">—</span> с⁻¹</h3>
+                <h3>Зависимость вязкости от температуры при фиксированных скоростях сдвига</h3>
                 <canvas id="chartT"></canvas>
-                <div class="note">Зависимость вязкости от температуры при заданной скорости сдвига</div>
+                <div class="note">3 линии: мин, средняя и макс скорость сдвига</div>
             </div>
             <div class="chart-container">
-                <h3>μ(γ̇) при T = <span id="tempLabel">—</span> °C</h3>
+                <h3>Зависимость вязкости от скорости сдвига при фиксированных температурах</h3>
                 <canvas id="chartGamma"></canvas>
-                <div class="note">Зависимость вязкости от скорости сдвига при заданной температуре</div>
+                <div class="note">3 линии: мин, средняя и макс температура</div>
             </div>
         </div>
     </div>
 
     <script>
-        const T_VALUES = [100, 175, 250];
-        const GAMMA_VALUES = [1, 100, 1000];
         let chartT = null, chartGamma = null;
         let lastReportUrl = '';
 
-        // Загрузка материалов
         async function loadMaterials() {
             try {
                 const res = await fetch('/api/materials');
@@ -181,7 +192,8 @@
                     select.appendChild(opt);
                 });
             } catch (err) {
-                showError('Ошибка загрузки материалов');
+                console.error('Ошибка загрузки материалов:', err);
+                showError('Не удалось загрузить материалы');
             }
         }
 
@@ -191,120 +203,145 @@
             setTimeout(() => error.textContent = '', 5000);
         }
 
+        // ИСПРАВЛЕНО: УБРАН ДВОЙНОЙ RETURN
         function validate() {
             const materialId = document.getElementById('material').value;
-            const T = parseFloat(document.getElementById('T').value);
-            const g = parseFloat(document.getElementById('gammadot').value);
+            const minT = parseFloat(document.getElementById('minT').value);
+            const maxT = parseFloat(document.getElementById('maxT').value);
+            const deltaT = parseFloat(document.getElementById('deltaT').value);
+            const minGamma = parseFloat(document.getElementById('minGamma').value);
+            const maxGamma = parseFloat(document.getElementById('maxGamma').value);
+            const deltaGamma = parseFloat(document.getElementById('deltaGamma').value);
 
             if (!materialId) return { valid: false, msg: 'Выберите материал' };
-            if (isNaN(T) || T < 100 || T > 250) return { valid: false, msg: 'T: 100–250 °C' };
-            if (isNaN(g) || g < 1 || g > 1000) return { valid: false, msg: 'γ̇: 1–1000 с⁻¹' };
-            return { valid: true, data: { materialId: parseInt(materialId), T, gammadot: g } };
+            if (isNaN(minT) || minT < 100 || minT > 250) return { valid: false, msg: 'T min: 100–250 °C' };
+            if (isNaN(maxT) || maxT < 100 || maxT > 250 || minT >= maxT) return { valid: false, msg: 'T max: 100–250 °C, > min' };
+            if (isNaN(deltaT) || deltaT <= 0) return { valid: false, msg: 'ΔT > 0' };
+            if (isNaN(minGamma) || minGamma < 1 || minGamma > 1000) return { valid: false, msg: 'γ̇ min: 1–1000 с⁻¹' };
+            if (isNaN(maxGamma) || maxGamma < 1 || maxGamma > 1000 || minGamma >= maxGamma) return { valid: false, msg: 'γ̇ max: 1–1000 с⁻¹, > min' };
+            if (isNaN(deltaGamma) || deltaGamma <= 0) return { valid: false, msg: 'Δγ̇ > 0' };
+            return { valid: true, data: { materialId: parseInt(materialId), minT, maxT, deltaT, minGamma, maxGamma, deltaGamma } };
         }
 
         async function calculate() {
             const v = validate();
             if (!v.valid) { showError(v.msg); return; }
 
-            const { materialId, T, gammadot } = v.data;
-            document.getElementById('gammaLabel').textContent = gammadot;
-            document.getElementById('tempLabel').textContent = T;
+            const { materialId, minT, maxT, deltaT, minGamma, maxGamma, deltaGamma } = v.data;
 
             try {
                 const res = await fetch('/api/calculate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ materialId, T, gammadot })
+                    body: JSON.stringify({ materialId, minT, maxT, deltaT, minGamma, maxGamma, deltaGamma })
                 });
                 const data = await res.json();
+                console.log("=== FULL DATA ===", data.full_data);
+                console.log("FULL SERVER RESPONSE:", JSON.parse(JSON.stringify(data.full_data)));
                 if (data.error) { showError(data.error); return; }
 
                 lastReportUrl = data.report_url;
+                const fd = data.full_data;
 
-                // === ЗАПОЛНЯЕМ ТАБЛИЦУ 3×3 ===
-
-                T_VALUES.forEach(t => {
-   
-                    GAMMA_VALUES.forEach(g => {
-                        const mu_val = data.full_data.mu_gamma[t][GAMMA_VALUES.indexOf(g)];
-                        console.log(mu_val);
-                        const cell = document.getElementById(`v${t}_${g}`);
-                        if (cell && mu_val !== undefined) {
-                            cell.textContent = mu_val.toFixed(1);
-                        }
-                    });
+                // === ТАБЛИЦА ===
+                const theadRow = document.querySelector('#table thead tr');
+                theadRow.innerHTML = '<th>T \\ γ̇</th>';
+                fd.gamma_range.forEach(g => {
+                    const th = document.createElement('th');
+                    th.textContent = `${parseFloat(g).toFixed(1)} с⁻¹`;
+                    theadRow.appendChild(th);
                 });
 
-                drawCharts(data.full_data, T, gammadot);
+                const tbody = document.querySelector('#table tbody');
+                tbody.innerHTML = '';
+                fd.T_range.forEach(t => {
+                    const tr = document.createElement('tr');
+                    const tdT = document.createElement('td');
+                    tdT.textContent = `${parseFloat(t).toFixed(1)} °C`;
+                    tr.appendChild(tdT);
+
+                    fd.gamma_range.forEach(g => {
+                        const keyT = parseFloat(t).toFixed(1);
+                        const keyG = parseFloat(g).toFixed(1);
+                        const mu = fd.mu_table?.[keyT]?.[keyG];
+                        const tdMu = document.createElement('td');
+                        tdMu.textContent = mu !== undefined ? parseFloat(mu).toFixed(1) : '-';
+                        tr.appendChild(tdMu);
+                    });
+                    tbody.appendChild(tr);
+                });
+
+                drawCharts(fd);
             } catch (err) {
-                console.log(err);
+                console.error(err);
                 showError('Ошибка сервера');
             }
         }
 
-        function drawCharts(fd, T, gammadot) {
-            if (typeof Chart === 'undefined') {
-                showError('Chart.js не загружен');
-                return;
-            }
+        function drawCharts(fd) {
+            const colors = ['#00d4ff', '#28a745', '#ff6b6b'];
 
-            const ctxT = document.getElementById('chartT').getContext('2d');
-            const ctxG = document.getElementById('chartGamma').getContext('2d');
-
+            // === ГРАФИК μ(T) ===
             if (chartT) chartT.destroy();
-            if (chartGamma) chartGamma.destroy();
 
-            // === μ(T) при фиксированном γ̇ ===
-            chartT = new Chart(ctxT, {
+            const labelsT = fd.T_range.map(t => Number(t).toFixed(1));
+
+            const datasetsT = fd.G_points.map((g, i) => {
+                const data = fd.mu_T[i] || [];  // ← теперь массив!
+
+                return {
+                    label: `γ̇ = ${Number(g).toFixed(1)} с⁻¹`,
+                    data: data,
+                    borderColor: colors[i % colors.length],
+                    backgroundColor: colors[i % colors.length] + '33',
+                    fill: false,
+                    tension: 0.3
+                };
+            });
+
+            chartT = new Chart(document.getElementById('chartT').getContext('2d'), {
                 type: 'line',
-                data: {
-                    labels: fd.T_range,
-                    datasets: [{
-                        label: `γ̇ = ${gammadot} с⁻¹`,
-                        data: fd.mu_vs_T,
-                        borderColor: '#00d4ff',
-                        backgroundColor: 'rgba(0, 212, 255, 0.1)',
-                        fill: false,
-                        tension: 0.2
-                    }]
-                },
+                data: { labels: labelsT, datasets: datasetsT },
                 options: {
                     responsive: true,
-                    plugins: { legend: { position: 'top' } },
                     scales: {
                         x: { title: { display: true, text: 'Температура T (°C)' } },
-                        y: { title: { display: true, text: 'Вязкость μ (Па·с)' } }
+                        y: { title: { display: true, text: 'Вязкость ƞ (Па·с)' }, beginAtZero: false }
                     }
                 }
             });
 
-            // === μ(γ̇) при фиксированном T ===
-            chartGamma = new Chart(ctxG, {
+            // === ГРАФИК μ(γ̇) ===
+            if (chartGamma) chartGamma.destroy();
+
+            const labelsG = fd.gamma_range.map(g => Number(g).toFixed(1));
+
+            const datasetsG = fd.T_points.map((t, i) => {
+                const data = fd.mu_gamma[i] || [];  // ← теперь массив!
+
+                return {
+                    label: `T = ${Number(t).toFixed(1)} °C`,
+                    data: data,
+                    borderColor: colors[i % colors.length],
+                    backgroundColor: colors[i % colors.length] + '33',
+                    fill: false,
+                    tension: 0.3
+                };
+            });
+
+            chartGamma = new Chart(document.getElementById('chartGamma').getContext('2d'), {
                 type: 'line',
-                data: {
-                    labels: fd.gamma_range,
-                    datasets: [{
-                        label: `T = ${T} °C`,
-                        data: fd.mu_vs_gamma,
-                        borderColor: '#28a745',
-                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                        fill: false,
-                        tension: 0.2
-                    }]
-                },
+                data: { labels: labelsG, datasets: datasetsG },
                 options: {
                     responsive: true,
-                    plugins: { legend: { position: 'top' } },
                     scales: {
-                        x: {
-                            type: 'logarithmic',
-                            title: { display: true, text: 'Скорость сдвига γ̇ (с⁻¹)' }
-                        },
-                        y: { title: { display: true, text: 'Вязкость μ (Па·с)' } }
+                        x: { type: 'logarithmic', title: { display: true, text: 'Скорость сдвига γ̇ (с⁻¹)' } },
+                        y: { title: { display: true, text: 'Вязкость ƞ (Па·с)' }, beginAtZero: false }
                     }
                 }
             });
         }
+    
 
         function downloadReport() {
             if (lastReportUrl) {
@@ -314,10 +351,7 @@
             }
         }
 
-        // Инициализация
-        window.addEventListener('load', () => {
-            loadMaterials();
-        });
+        window.addEventListener('load', loadMaterials);
     </script>
 </body>
 </html>
