@@ -265,14 +265,23 @@ int main() {
     svr.Post("/api/materials", [&](const httplib::Request& req, httplib::Response& res) {
         json j;
         try { j = json::parse(req.body); }
-        catch (...) { res.status = 400; return; }
+        catch (...) { 
+            res.status = 400; 
+            return; 
+        }
 
         string name = j.value("name", "");
         double mu0 = j.value("mu0", 0.0), b = j.value("b", 0.0), T0 = j.value("T0", 0.0), n = j.value("n", 0.0);
-        if (name.empty()) { res.status = 400; return; }
+        if (name.empty()) {
+            res.status = 400; 
+            return; 
+        }
 
         PGconn* conn = db_pool->get();
-        if (!conn) { res.status = 500; return; }
+        if (!conn) { 
+            res.status = 500; 
+            return;
+        }
 
         string esc_n = safe_escape(conn, name);
         string q = "INSERT INTO materials (name, mu0, b, T0, n) VALUES (" + esc_n + ", " +
@@ -288,7 +297,10 @@ int main() {
     svr.Delete(R"(/api/materials/(\d+))", [&](const httplib::Request& req, httplib::Response& res) {
         int id = stoi(req.matches[1]);
         PGconn* conn = db_pool->get();
-        if (!conn) { res.status = 500; return; }
+        if (!conn) {
+            res.status = 500;
+            return; 
+        }
 
         string q = "DELETE FROM materials WHERE id = " + to_string(id);
         PGresult* r = PQexec(conn, q.c_str());
@@ -301,7 +313,11 @@ int main() {
     svr.Post("/api/calculate", [&](const httplib::Request& req, httplib::Response& res) {
         json j;
         try { j = json::parse(req.body); }
-        catch (...) { res.status = 400; res.set_content(json{ {"error", "Invalid JSON"} }.dump(), "application/json"); return; }
+        catch (...) {
+            res.status = 400;
+            res.set_content(json{ {"error", "Invalid JSON"} }.dump(), "application/json");
+            return; 
+        }
 
         int materialId = j.value("materialId", 0);
         double minT = j.value("minT", 0.0), maxT = j.value("maxT", 0.0), deltaT = j.value("deltaT", 0.0);
@@ -315,7 +331,11 @@ int main() {
         }
 
         PGconn* conn = db_pool->get();
-        if (!conn) { res.status = 500; res.set_content(json{ {"error", "DB unavailable"} }.dump(), "application/json"); return; }
+        if (!conn) {
+            res.status = 500;
+            res.set_content(json{ {"error", "DB unavailable"} }.dump(), "application/json"); 
+            return;
+        }
 
         string q = "SELECT mu0, b, T0, n FROM materials WHERE id = " + to_string(materialId);
         PGresult* r = PQexec(conn, q.c_str());
