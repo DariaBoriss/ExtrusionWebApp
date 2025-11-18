@@ -1,3 +1,4 @@
+
 #include "httplib.h"
 #include <libpq-fe.h>
 #include <iostream>
@@ -113,17 +114,30 @@ int main() {
 
     // === АВТОРИЗАЦИЯ ===
     svr.Post("/api/login", [&](const httplib::Request& req, httplib::Response& res) {
+
         json j;
-        try { j = json::parse(req.body); }
-        catch (...) { res.status = 400; res.set_content(json{ {"error", "Invalid JSON"} }.dump(), "application/json"); return; }
+
+        try { 
+            j = json::parse(req.body); 
+        }
+        catch (...) { res.status = 400; 
+        res.set_content(json{ {"error", "Invalid JSON"} }.dump(), "application/json");
+        return;
+        }
 
         string login = j.value("login", ""), password = j.value("password", "");
         if (login.empty() || password.empty()) {
-            res.status = 400; res.set_content(json{ {"error", "Empty login/password"} }.dump(), "application/json"); return;
+            res.status = 400;
+            res.set_content(json{ {"error", "Empty login/password"} }.dump(), "application/json");
+            return;
         }
 
         PGconn* conn = db_pool->get();
-        if (!conn) { res.status = 500; res.set_content(json{ {"error", "DB unavailable"} }.dump(), "application/json"); return; }
+        if (!conn) { 
+        res.status = 500; 
+        res.set_content(json{ {"error", "DB unavailable"} }.dump(), "application/json");
+        return; 
+        }
 
         string esc_l = safe_escape(conn, login);
         string esc_p = safe_escape(conn, password);
@@ -145,7 +159,11 @@ int main() {
     // === ПОЛЬЗОВАТЕЛИ (GET) ===
     svr.Get("/api/users", [&](const httplib::Request&, httplib::Response& res) {
         PGconn* conn = db_pool->get();
-        if (!conn) { res.status = 500; res.set_content(json{ {"error", "DB unavailable"} }.dump(), "application/json"); return; }
+        if (!conn) {
+            res.status = 500;
+            res.set_content(json{ {"error", "DB unavailable"} }.dump(), "application/json");
+            return;
+        }
 
         PGresult* r = PQexec(conn, "SELECT login, password, role FROM users ORDER BY login");
         PQconsumeInput(conn);
@@ -154,7 +172,8 @@ int main() {
             std::cerr << "DB ERROR: " << PQerrorMessage(conn) << std::endl;
             PQclear(r);
             db_pool->put(conn);
-            res.status = 500; res.set_content(json{ {"error", "Query failed"} }.dump(), "application/json");
+            res.status = 500;
+            res.set_content(json{ {"error", "Query failed"} }.dump(), "application/json");
             return;
         }
 
@@ -175,15 +194,24 @@ int main() {
     svr.Post("/api/users", [&](const httplib::Request& req, httplib::Response& res) {
         json j;
         try { j = json::parse(req.body); }
-        catch (...) { res.status = 400; res.set_content(json{ {"error", "Invalid JSON"} }.dump(), "application/json"); return; }
+        catch (...) { 
+            res.status = 400;
+            res.set_content(json{ {"error", "Invalid JSON"} }.dump(), "application/json");
+            return;
+        }
 
         string login = j.value("login", ""), password = j.value("password", ""), role = j.value("role", "");
         if (login.empty() || password.empty() || (role != "admin" && role != "researcher")) {
-            res.status = 400; res.set_content(json{ {"error", "Invalid data"} }.dump(), "application/json"); return;
+            res.status = 400; 
+            res.set_content(json{ {"error", "Invalid data"} }.dump(), "application/json"); 
+            return;
         }
 
         PGconn* conn = db_pool->get();
-        if (!conn) { res.status = 500; return; }
+        if (!conn) { 
+            res.status = 500;
+            return; 
+        }
 
         string esc_l = safe_escape(conn, login);
         string esc_p = safe_escape(conn, password);
@@ -199,7 +227,11 @@ int main() {
     // === МАТЕРИАЛЫ (GET) ===
     svr.Get("/api/materials", [&](const httplib::Request&, httplib::Response& res) {
         PGconn* conn = db_pool->get();
-        if (!conn) { res.status = 500; res.set_content(json{ {"error", "DB unavailable"} }.dump(), "application/json"); return; }
+        if (!conn) { 
+            res.status = 500;
+            res.set_content(json{ {"error", "DB unavailable"} }.dump(), "application/json"); 
+            return; 
+        }
 
         PGresult* r = PQexec(conn, "SELECT id, name, mu0, b, T0, n FROM materials ORDER BY name");
         PQconsumeInput(conn);
@@ -208,7 +240,8 @@ int main() {
             std::cerr << "DB ERROR: " << PQerrorMessage(conn) << std::endl;
             PQclear(r);
             db_pool->put(conn);
-            res.status = 500; res.set_content(json{ {"error", "Query failed"} }.dump(), "application/json");
+            res.status = 500; 
+            res.set_content(json{ {"error", "Query failed"} }.dump(), "application/json");
             return;
         }
 
@@ -277,7 +310,7 @@ int main() {
         if (minT < 100 || maxT > 250 || minT >= maxT || deltaT <= 0 ||
             minG < 1 || maxG > 1000 || minG >= maxG || deltaG <= 0) {
             res.status = 400;
-            res.set_content(json{ {"error", "T: 100–250, γ̇: 1–1000, min < max, Δ > 0"} }.dump(), "application/json");
+            res.set_content(json{ {"error", "Значения введены неверно"} }.dump(), "application/json");
             return;
         }
 
